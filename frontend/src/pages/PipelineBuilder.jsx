@@ -8,6 +8,7 @@ import ManualMetadataEditor from '../components/ManualMetadataEditor';
 import AgentStatusPanel from '../components/AgentStatusPanel';
 import { getMetadata, deployPipeline, getTables } from '../api/fabric';
 import { generatePipeline, validateAndOptimize } from '../api/llm';
+
 import { API_URL } from '../config';
 import { Play, RefreshCw, Database, CheckCircle, XCircle, Bot, User, ChevronDown, Trash2, Table, Plus, MessageSquare, Clock, LogOut, FileText, Zap } from 'lucide-react';
 
@@ -80,6 +81,7 @@ const PipelineBuilder = () => {
         }
     };
 
+
     useEffect(() => {
         const savedChats = localStorage.getItem(CHATS_STORAGE_KEY);
         const savedActiveId = localStorage.getItem(ACTIVE_CHAT_KEY);
@@ -123,6 +125,53 @@ const PipelineBuilder = () => {
         setAgentRunning(false);
     }, [activeChatId]);
 
+    // Create a new chat
+    const createNewChat = () => {
+        const newChat = {
+            id: `chat_${Date.now()}`,
+            title: 'New Chat',
+            messages: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+        setAllChats(prev => [newChat, ...prev]);
+        setActiveChatId(newChat.id);
+        setShowHistory(false);
+        return newChat;
+    };
+
+    // Delete a chat
+    const deleteChat = (chatId, e) => {
+        if (e) e.stopPropagation();
+        setAllChats(prev => prev.filter(c => c.id !== chatId));
+        if (activeChatId === chatId) {
+            const remaining = allChats.filter(c => c.id !== chatId);
+            setActiveChatId(remaining.length > 0 ? remaining[0].id : null);
+        }
+    };
+
+    // Switch to a chat
+    const switchChat = (chatId) => {
+        setActiveChatId(chatId);
+        setShowHistory(false);
+    };
+
+    // Update messages in current chat
+    const updateCurrentChatMessages = (newMessages) => {
+        setAllChats(prev => prev.map(chat => {
+            if (chat.id === activeChatId) {
+                // Update title based on first user message if it's currently "New Chat"
+                let title = chat.title;
+                const firstUserMsg = newMessages.find(m => m.type === 'user');
+                if (firstUserMsg && chat.title === 'New Chat') {
+                    title = firstUserMsg.content.slice(0, 40) + (firstUserMsg.content.length > 40 ? '...' : '');
+                }
+                return { ...chat, messages: newMessages, title, updatedAt: Date.now() };
+            }
+            return chat;
+        }));
+    };
+
     // Get current chat's messages
     const currentChat = allChats.find(c => c.id === activeChatId);
     const messages = currentChat?.messages || [];
@@ -137,6 +186,7 @@ const PipelineBuilder = () => {
             setSelectedWorkspace(metadata.workspaces[0]);
         }
     }, [metadata]);
+
 
     // Auto-select first lakehouse when workspace changes
     useEffect(() => {
@@ -209,54 +259,27 @@ const PipelineBuilder = () => {
         );
     };
 
-    // Create a new chat
-    const createNewChat = () => {
-        const newChat = {
-            id: `chat_${Date.now()}`,
-            title: 'New Chat',
-            messages: [],
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        };
-        setAllChats(prev => [newChat, ...prev]);
-        setActiveChatId(newChat.id);
-        setShowHistory(false);
-    };
 
-    // Delete a chat
-    const deleteChat = (chatId) => {
-        setAllChats(prev => prev.filter(c => c.id !== chatId));
-        if (activeChatId === chatId) {
-            const remaining = allChats.filter(c => c.id !== chatId);
-            setActiveChatId(remaining.length > 0 ? remaining[0].id : null);
-        }
-    };
 
-    // Switch to a chat
-    const switchChat = (chatId) => {
-        setActiveChatId(chatId);
-        setShowHistory(false);
-    };
-
-    // Update messages in current chat
-    const updateCurrentChatMessages = (newMessages) => {
-        setAllChats(prev => prev.map(chat => {
-            if (chat.id === activeChatId) {
-                // Update title based on first user message
-                let title = chat.title;
-                const firstUserMsg = newMessages.find(m => m.type === 'user');
-                if (firstUserMsg && chat.title === 'New Chat') {
-                    title = firstUserMsg.content.slice(0, 40) + (firstUserMsg.content.length > 40 ? '...' : '');
-                }
-                return { ...chat, messages: newMessages, title, updatedAt: Date.now() };
-            }
-            return chat;
-        }));
-    };
 
     const handleGenerate = async (prompt) => {
         // Create new chat if none exists
         if (!activeChatId) {
+            const newChat = createNewChat();
+            // In synchronous version, newChat is returned and we can use its ID
+            // Ideally we'd just use activeChatId, but since state updates are async,
+            // we'll rely on our local update logic or re-selecting the chat id from state
+            // However, since createNewChat updates state synchronously (the queueing),
+            // and we need the ID now.
+            // Let's refactor similar to original:
+        }
+
+        // We need to know the chat ID we are working with.
+        // If creating new chat, createNewChat() updates state.
+        // But for this function execution, we need the ID.
+        let currentChatId = activeChatId;
+        if (!currentChatId) {
+            // Simplified: logic was inline before. Rerunning inline creation for safety in this scope:
             const newChat = {
                 id: `chat_${Date.now()}`,
                 title: prompt.slice(0, 40) + (prompt.length > 40 ? '...' : ''),
@@ -266,6 +289,7 @@ const PipelineBuilder = () => {
             };
             setAllChats(prev => [newChat, ...prev]);
             setActiveChatId(newChat.id);
+            currentChatId = newChat.id;
         }
 
         // Include context about selected resources with schema
@@ -303,7 +327,12 @@ const PipelineBuilder = () => {
         const fullPrompt = prompt + context;
 
         const userMessage = { type: 'user', content: prompt, timestamp: Date.now() };
-        const newMessages = [...messages, userMessage];
+        // If we just created a chat (currentChatId != activeChatId at function start), messages is empty
+        // But we just manually ensured currentChatId is set and state is updating.
+        // The 'messages' from state is stale if we just created it.
+        const currentMessages = currentChatId !== activeChatId ? [] : messages;
+        const newMessages = [...currentMessages, userMessage];
+
         updateCurrentChatMessages(newMessages);
 
         setIsGenerating(true);

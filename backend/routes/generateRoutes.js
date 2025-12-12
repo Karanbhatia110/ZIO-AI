@@ -21,13 +21,15 @@ router.post('/', async (req, res) => {
         const promptTokens = tokenService.calculateTokens(prompt);
         const resultTokens = tokenService.calculateTokens(result);
         const totalTokens = promptTokens + resultTokens;
-        tokenService.recordUsage(userId, totalTokens);
+        await tokenService.recordUsage(userId, totalTokens);
+
+        const remaining = await tokenService.getRemainingTokens(userId);
 
         res.json({
             result: result,
             usage: {
                 tokensUsed: totalTokens,
-                remaining: tokenService.getRemainingTokens(userId)
+                remaining: remaining
             }
         });
     } catch (error) {

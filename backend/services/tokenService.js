@@ -1,36 +1,7 @@
-const fs = require('fs');
-const path = require('path');
+const User = require('../models/User');
 
-const USAGE_FILE = path.join(__dirname, '../data/token-usage.json');
 const DAILY_LIMIT = 100000; // 100k tokens per day
 const TOKENS_PER_CHAR = 100; // 1 character = 100 tokens
-
-// Ensure data directory exists
-const dataDir = path.join(__dirname, '../data');
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
-
-// Load usage data
-function loadUsageData() {
-    try {
-        if (fs.existsSync(USAGE_FILE)) {
-            return JSON.parse(fs.readFileSync(USAGE_FILE, 'utf-8'));
-        }
-    } catch (error) {
-        console.error('Error loading usage data:', error);
-    }
-    return { users: {} };
-}
-
-// Save usage data
-function saveUsageData(data) {
-    try {
-        fs.writeFileSync(USAGE_FILE, JSON.stringify(data, null, 2));
-    } catch (error) {
-        console.error('Error saving usage data:', error);
-    }
-}
 
 // Get today's date key
 function getTodayKey() {
@@ -42,10 +13,20 @@ function getUserId(req) {
     // Use a hash of the auth token or default to 'anonymous'
     const authHeader = req.headers.authorization;
     if (authHeader) {
-        // Simple hash for demo - in production use proper user ID
+        // Simple hash for demo - in production use proper user ID from JWT
         return 'user_' + Buffer.from(authHeader.slice(-20)).toString('base64').slice(0, 10);
     }
     return 'anonymous';
+}
+
+// Ensure user exists and get them
+async function getUser(userId) {
+    let user = await User.findOne({ userId });
+    if (!user) {
+        user = new User({ userId });
+        await user.save();
+    }
+    return user;
 }
 
 // Calculate tokens from content
@@ -55,11 +36,10 @@ function calculateTokens(content) {
 }
 
 // Check if user has subscription
-function hasSubscription(userId) {
-    const data = loadUsageData();
-    const user = data.users[userId];
+async function hasSubscription(userId) {
+    const user = await getUser(userId);
 
-    if (!user || !user.subscription) return false;
+    if (!user.subscription || !user.subscription.expiresAt) return false;
 
     // Check if subscription is still valid
     const expiryDate = new Date(user.subscription.expiresAt);
@@ -67,118 +47,106 @@ function hasSubscription(userId) {
 }
 
 // Get user's daily usage
-function getDailyUsage(userId) {
-    const data = loadUsageData();
-    const user = data.users[userId];
+async function getDailyUsage(userId) {
+    const user = await getUser(userId);
     const today = getTodayKey();
 
-    if (!user || !user.dailyUsage || !user.dailyUsage[today]) {
-        return 0;
-    }
-
-    return user.dailyUsage[today];
+    // Access Map directly
+    return user.dailyUsage.get(today) || 0;
 }
 
 // Get remaining tokens for user
-function getRemainingTokens(userId) {
-    if (hasSubscription(userId)) {
+async function getRemainingTokens(userId) {
+    const isSubscribed = await hasSubscription(userId);
+    if (isSubscribed) {
         return Infinity; // Unlimited for subscribers
     }
 
-    const used = getDailyUsage(userId);
+    const used = await getDailyUsage(userId);
     return Math.max(0, DAILY_LIMIT - used);
 }
 
 // Record token usage
-function recordUsage(userId, tokens) {
-    const data = loadUsageData();
+async function recordUsage(userId, tokens) {
+    const user = await getUser(userId);
     const today = getTodayKey();
 
-    if (!data.users[userId]) {
-        data.users[userId] = {
-            createdAt: new Date().toISOString(),
-            dailyUsage: {},
-            totalUsage: 0
-        };
-    }
+    const currentUsage = user.dailyUsage.get(today) || 0;
+    user.dailyUsage.set(today, currentUsage + tokens);
 
-    if (!data.users[userId].dailyUsage) {
-        data.users[userId].dailyUsage = {};
-    }
+    user.totalUsage = (user.totalUsage || 0) + tokens;
+    user.lastUsed = new Date();
 
-    data.users[userId].dailyUsage[today] = (data.users[userId].dailyUsage[today] || 0) + tokens;
-    data.users[userId].totalUsage = (data.users[userId].totalUsage || 0) + tokens;
-    data.users[userId].lastUsed = new Date().toISOString();
-
-    saveUsageData(data);
+    await user.save();
 }
 
 // Set subscription for user
-function setSubscription(userId, months = 1) {
-    const data = loadUsageData();
-
-    if (!data.users[userId]) {
-        data.users[userId] = {
-            createdAt: new Date().toISOString(),
-            dailyUsage: {},
-            totalUsage: 0
-        };
-    }
+async function setSubscription(userId, months = 1) {
+    const user = await getUser(userId);
 
     const expiryDate = new Date();
     expiryDate.setMonth(expiryDate.getMonth() + months);
 
-    data.users[userId].subscription = {
+    user.subscription = {
         plan: 'unlimited',
-        startedAt: new Date().toISOString(),
-        expiresAt: expiryDate.toISOString(),
-        price: 899
+        startedAt: new Date(),
+        expiresAt: expiryDate,
+        price: 899,
+        isActive: true
     };
 
-    saveUsageData(data);
-    return data.users[userId].subscription;
+    await user.save();
+    return user.subscription;
 }
 
 // Get usage stats for user
-function getUsageStats(userId) {
-    const data = loadUsageData();
-    const user = data.users[userId] || {};
+async function getUsageStats(userId) {
+    const user = await getUser(userId);
     const today = getTodayKey();
 
+    const dailyUsed = user.dailyUsage.get(today) || 0;
+    const isSubscribed = await hasSubscription(userId);
+
     return {
-        dailyUsed: user.dailyUsage?.[today] || 0,
+        dailyUsed,
         dailyLimit: DAILY_LIMIT,
-        dailyRemaining: getRemainingTokens(userId),
+        dailyRemaining: isSubscribed ? Infinity : Math.max(0, DAILY_LIMIT - dailyUsed),
         totalUsed: user.totalUsage || 0,
-        hasSubscription: hasSubscription(userId),
-        subscription: user.subscription || null,
+        hasSubscription: isSubscribed,
+        subscription: user.subscription,
         tokensPerChar: TOKENS_PER_CHAR
     };
 }
 
 // Middleware to check token limits
-function tokenLimitMiddleware(req, res, next) {
-    const userId = getUserId(req);
-    const remaining = getRemainingTokens(userId);
+async function tokenLimitMiddleware(req, res, next) {
+    try {
+        const userId = getUserId(req);
+        const remaining = await getRemainingTokens(userId);
+        const subscribed = await hasSubscription(userId);
 
-    // Add usage info to request
-    req.tokenUsage = {
-        userId,
-        remaining,
-        hasSubscription: hasSubscription(userId)
-    };
+        // Add usage info to request
+        req.tokenUsage = {
+            userId,
+            remaining,
+            hasSubscription: subscribed
+        };
 
-    // If no tokens remaining, block the request
-    if (remaining <= 0) {
-        return res.status(429).json({
-            error: 'Daily token limit exceeded',
-            code: 'TOKEN_LIMIT_EXCEEDED',
-            message: 'You have reached your daily limit of 100,000 tokens. Upgrade to Premium for unlimited access.',
-            upgradeUrl: '/subscription'
-        });
+        // If no tokens remaining, block the request
+        if (remaining <= 0) {
+            return res.status(429).json({
+                error: 'Daily token limit exceeded',
+                code: 'TOKEN_LIMIT_EXCEEDED',
+                message: 'You have reached your daily limit of 100,000 tokens. Upgrade to Premium for unlimited access.',
+                upgradeUrl: '/subscription'
+            });
+        }
+
+        next();
+    } catch (error) {
+        console.error('Token middleware error:', error);
+        next(error);
     }
-
-    next();
 }
 
 module.exports = {

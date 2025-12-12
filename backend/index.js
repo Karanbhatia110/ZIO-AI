@@ -2,6 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const config = require('./config');
 const logger = require('./utils/logger');
+const connectDB = require('./db');
+
+// Connect to Database
+connectDB();
+
 
 const authRoutes = require('./routes/authRoutes');
 const metadataRoutes = require('./routes/metadataRoutes');
@@ -10,6 +15,7 @@ const deployRoutes = require('./routes/deployRoutes');
 const tablesRoutes = require('./routes/tablesRoutes');
 const validateRoutes = require('./routes/validateRoutes');
 const usageRoutes = require('./routes/usageRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 const { tokenLimitMiddleware } = require('./services/tokenService');
 
 const app = express();
@@ -25,6 +31,7 @@ app.use('/api/deploy', deployRoutes);
 app.use('/api/tables', tablesRoutes);
 app.use('/api/validate', tokenLimitMiddleware, validateRoutes);
 app.use('/api/usage', usageRoutes);
+app.use('/api/chats', chatRoutes);
 
 app.get('/', (req, res) => {
     res.send('Fabric Data Engineer Backend is running');
