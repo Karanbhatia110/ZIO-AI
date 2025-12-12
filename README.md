@@ -215,14 +215,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Karan**
 
-- GitHub: [@yourusername](https://github.com/yourusername)
+- GitHub: [@Karanbhatia110](https://github.com/Karanbhatia110)
 
 ---
 
 <div align="center">
 
 **⭐ Star this repo if you find it helpful!**
-
-Built with ❤️ using Gemini AI
 
 </div>
