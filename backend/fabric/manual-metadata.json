@@ -1,0 +1,58 @@
+{
+  "workspaces": [
+    {
+      "id": "manual-ws",
+      "name": "users"
+    }
+  ],
+  "lakehouses": [
+    {
+      "id": "lh-1",
+      "name": "LearnPipelines",
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "user_id",
+              "datatype": "int"
+            },
+            {
+              "name": "name",
+              "datatype": "string"
+            },
+            {
+              "name": "email",
+              "datatype": "string"
+            },
+            {
+              "name": "updated_at",
+              "datatype": "string"
+            }
+          ]
+        },
+        {
+          "name": "user_staging",
+          "columns": [
+            {
+              "name": "user_id",
+              "datatype": "int"
+            },
+            {
+              "name": "name",
+              "datatype": "string"
+            },
+            {
+              "name": "email",
+              "datatype": "string"
+            },
+            {
+              "name": "updated_at",
+              "datatype": "string"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
