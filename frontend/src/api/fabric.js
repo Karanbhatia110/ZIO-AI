@@ -1,6 +1,5 @@
 import axios from 'axios';
-
-const API_URL = 'http://localhost:3000/api';
+import { API_URL } from '../config';
 
 export const connectFabric = async (credentials) => {
     return await axios.post(`${API_URL}/auth/connect`, credentials);

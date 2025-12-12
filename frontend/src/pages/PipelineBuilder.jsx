@@ -8,6 +8,7 @@ import ManualMetadataEditor from '../components/ManualMetadataEditor';
 import AgentStatusPanel from '../components/AgentStatusPanel';
 import { getMetadata, deployPipeline, getTables } from '../api/fabric';
 import { generatePipeline, validateAndOptimize } from '../api/llm';
+import { API_URL } from '../config';
 import { Play, RefreshCw, Database, CheckCircle, XCircle, Bot, User, ChevronDown, Trash2, Table, Plus, MessageSquare, Clock, LogOut, FileText, Zap } from 'lucide-react';
 
 const CHATS_STORAGE_KEY = 'zio_all_chats';
@@ -69,7 +70,7 @@ const PipelineBuilder = () => {
         try {
             const token = sessionStorage.getItem('fabricAccessToken');
             const headers = token ? { Authorization: `Bearer ${token}` } : {};
-            const res = await fetch('http://localhost:3000/api/usage/stats', { headers });
+            const res = await fetch(`${API_URL}/usage/stats`, { headers });
             if (res.ok) {
                 const data = await res.json();
                 setTokenUsage(data);

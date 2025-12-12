@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Save, Settings, ChevronDown, ChevronRight } from 'lucide-react';
 import axios from 'axios';
-
-const API_URL = 'http://localhost:3000/api';
+import { API_URL } from '../config';
 
 const DATATYPES = ['string', 'int', 'long', 'double', 'boolean', 'date', 'timestamp', 'decimal', 'binary'];
 

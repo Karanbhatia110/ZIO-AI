@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Crown, Zap, Shield, Mail, ArrowLeft, Loader2 } from 'lucide-react';
 import axios from 'axios';
-
-const API_URL = 'http://localhost:3000/api';
+import { API_URL } from '../config';
 
 const Subscription = () => {
     const navigate = useNavigate();
